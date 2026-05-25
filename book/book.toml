@@ -1,0 +1,17 @@
+[book]
+title = "TensorRT 知識圖譜"
+authors = ["Edison Hsieh"]
+language = "zh-Hant"
+src = "src"
+
+[build]
+build-dir = "html"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html]
+git-repository-url = ""
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+fold.enable = true
+fold.level = 0    

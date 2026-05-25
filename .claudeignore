@@ -1,0 +1,11 @@
+# mdbook build output
+book/html/
+
+# Python virtual environment
+.venv/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# TensorRT engine files (binary, large)
+engines/
