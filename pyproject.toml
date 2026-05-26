@@ -1,0 +1,39 @@
+[project]
+name = "tensorrt-yolo-benchmark"
+version = "0.1.0"
+description = "TensorRT YOLO classification model conversion and inference benchmark"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "ultralytics>=8.3,<9",
+    "onnx>=1.16",
+    "onnxruntime-gpu>=1.20",
+    "numpy>=1.26",
+    "opencv-python>=4.10",
+    "matplotlib>=3.9",
+    "pandas>=2.2",
+    "ipykernel>=6.29",
+    "tqdm>=4.66",
+    "Pillow>=10.4",
+    "albumentations>=1.4",
+    "torch",
+    "torchvision",
+    "tensorrt"
+]
+
+[dependency-groups]
+dev = [
+    "jupyterlab>=4.2",
+]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+torchvision = { index = "pytorch-cu126" }
+tensorrt = { path = "C:/Users/edisonhsieh/Downloads/TensorRT-10.8.0.43.Windows.win10.cuda-12.8/TensorRT-10.8.0.43/python/tensorrt-10.8.0.43-cp312-none-win_amd64.whl" }
