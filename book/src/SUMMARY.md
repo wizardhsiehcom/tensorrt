@@ -17,6 +17,7 @@
 
 - [ONNX 模型匯出](workflow/onnx-export.md)
 - [TensorRT 引擎建置](workflow/engine-build.md)
+- [Engine Build 參數詳解](workflow/build-params.md)
 - [動態 Batch 工作流程](workflow/dynamic-batch.md)
 - [前處理管線](workflow/preprocessing.md)
 
@@ -26,6 +27,7 @@
 - [延遲與吞吐量](benchmark/metrics.md)
 - [實務決策概念](benchmark/practical-decisions.md)
 - [結果分析](benchmark/results.md)
+- [Engine 參數 Sweep 調研](benchmark/param-sweep.md)
 
 # 環境設定
 
