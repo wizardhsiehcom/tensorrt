@@ -22,6 +22,7 @@ Update the mdbook knowledge graph at `D:\tensorrt\book\`.
 ## Conventions
 
 - All prose in Traditional Chinese (繁體中文) unless the user writes in English.
+- **No notebook references**: never mention specific notebook filenames, cell numbers, or cell indices (e.g. "在 Cell 3 中…", "執行 benchmark.ipynb 第 7 個 cell"). Notebooks are revised frequently; describe concepts and steps directly instead.
 - Diagrams: prefer `flowchart`, `sequenceDiagram`, or `graph` depending on what best represents the concept.
 - No inline HTML — keep everything in standard Markdown + Mermaid.
 - Keep pages focused: one concept per page, cross-link with relative paths when referencing other pages.
