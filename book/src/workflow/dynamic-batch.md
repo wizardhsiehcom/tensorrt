@@ -1,15 +1,49 @@
 # 動態 Batch 工作流程
 
-本頁說明如何讓 YOLO ONNX 模型支援動態 batch 大小，在 TensorRT 推理時可以靈活指定每次輸入的圖片數量。
+本頁說明如何讓 ONNX 模型支援動態 batch 大小，在 TensorRT 推理時可以靈活指定每次輸入的圖片數量。
+
+## 核心原則
+
+> **TensorRT 只能讓「parser 看到的符號維度」變動，不能讓「parser 已固定的維度」變動。**
+
+ONNX parser 解析模型時，若 batch dim 是固定數值（`dim_value=1`），就會把整個計算圖的中間層 shape 全部固定。之後即使加了 Optimization Profile 也無法覆蓋，trtexec 會報錯：
+
+```
+Static model does not take explicit shapes since the shape of
+inference tensors will be determined by the model itself
+```
+
+因此，不論使用 trtexec 還是 Python API，**ONNX 的 batch 維度必須是符號軸（`dim_param`）**，這是前置條件，不是可選項。
 
 ## 整體流程
 
 ```mermaid
 flowchart TD
-    A[PyTorch YOLO 模型] -->|dynamic_axes| B[動態 batch ONNX]
-    B -->|OptimizationProfile| C["TRT Engine<br/>含 min/opt/max batch"]
-    C -->|set_input_shape| D["推理<br/>指定實際 batch"]
+    A["ONNX（batch 維度）"] --> B{靜態還是符號?}
+    B -->|"dim_value=1（靜態）"| C["補救：Python API 改寫<br/>見下方『靜態 ONNX 補救』"]
+    B -->|"dim_param=batch_size（符號）"| D["trtexec / Python API<br/>加 OptimizationProfile"]
+    C --> D
+    D --> E["TRT Engine<br/>含 min / opt / max batch"]
+    E --> F["推理：set_input_shape<br/>動態指定實際 batch"]
 ```
+
+## Step 0 — 確認 ONNX batch 維度狀態
+
+```python
+import onnx
+
+model = onnx.load("model.onnx")
+dim = model.graph.input[0].type.tensor_type.shape.dim[0]
+
+if dim.HasField("dim_value"):
+    print(f"靜態 batch: dim_value={dim.dim_value}")  # 需要補救
+elif dim.HasField("dim_param"):
+    print(f"符號 batch: dim_param={dim.dim_param}")  # 已可直接用
+```
+
+---
+
+## 情況 A — 從 PyTorch 匯出時直接設動態軸（推薦）
 
 ## Step 1 — 匯出動態 Batch ONNX
 
@@ -46,18 +80,60 @@ onnx.checker.check_model(model_onnx)
 print("ONNX OK")
 ```
 
+---
+
+## 情況 B — 靜態 ONNX 補救（已有現成模型，無法重新匯出）
+
+若取得的 ONNX 是靜態 batch，可用 Python 直接改寫維度，不需要原始 PyTorch 模型：
+
+```python
+import onnx
+
+model = onnx.load("model_static.onnx")
+
+# 輸入：將 batch dim 從靜態改為符號
+for inp in model.graph.input:
+    d = inp.type.tensor_type.shape.dim[0]
+    d.ClearField("dim_value")
+    d.dim_param = "batch_size"
+
+# 輸出：同步修改，避免 TRT 型別推斷失敗
+for out in model.graph.output:
+    if out.type.HasField("tensor_type") and out.type.tensor_type.HasField("shape"):
+        d = out.type.tensor_type.shape.dim[0]
+        d.ClearField("dim_value")
+        d.dim_param = "batch_size"
+
+onnx.save(model, "model_dynamic.onnx")
+```
+
+> 改寫後使用 `model_dynamic.onnx` 進行後續 engine build，原始檔案不受影響。
+
+---
+
 ## Step 2 — 建構 TRT Engine（含 OptimizationProfile）
+
+trtexec 是 Python API 的命令列包裝，兩者完全等價：
+
+| trtexec 參數 | Python API 對應 |
+|---|---|
+| `--minShapes=images:1x3x448x448` | `profile.set_shape("images", min=(1,3,448,448), ...)` |
+| `--optShapes=images:4x3x448x448` | `profile.set_shape("images", opt=(4,3,448,448), ...)` |
+| `--maxShapes=images:32x3x448x448` | `profile.set_shape("images", max=(32,3,448,448), ...)` |
+| `--fp16` | `config.set_flag(trt.BuilderFlag.FP16)` |
+| `--timingCacheFile=...` | `config.timing_cache` |
+| `--skipInference` | build only，不跑 benchmark |
 
 ### 方式一：trtexec（推薦）
 
 ```bash
 trtexec \
-  --onnx=yolo.onnx \
-  --saveEngine=yolo.engine \
+  --onnx=model_dynamic.onnx \
+  --saveEngine=model.engine \
   --fp16 \
-  --minShapes=images:1x3x640x640 \
-  --optShapes=images:4x3x640x640 \
-  --maxShapes=images:16x3x640x640
+  --minShapes=images:1x3x448x448 \
+  --optShapes=images:4x3x448x448 \
+  --maxShapes=images:32x3x448x448
 ```
 
 ### 方式二：Python API

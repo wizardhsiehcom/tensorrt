@@ -3,7 +3,8 @@
 ## 指標定義
 
 ### 延遲（Latency）
-單張影像從輸入到輸出的時間，單位 **毫秒（ms）**。
+
+單張影像從輸入到輸出的時間，單位**毫秒（ms）**。
 
 | 指標 | 說明 | 適用場景 |
 |------|------|---------|
@@ -14,6 +15,7 @@
 | P99 | 第 99 百分位 | SLA 保證、即時系統 |
 
 ### 吞吐量（Throughput）
+
 單位時間處理的影像數，單位 **QPS（Queries Per Second）**。
 
 ```
@@ -25,10 +27,10 @@ QPS = 1000 / mean_latency_ms
 ```mermaid
 graph LR
     subgraph "低延遲優先"
-        A["batch=1<br/>串流處理"]
+        A["batch=1\n串流處理"]
     end
     subgraph "高吞吐量優先"
-        B["large batch<br/>離線批次"]
+        B["large batch\n離線批次"]
     end
     A --> C["最佳化 batch=1 延遲"]
     B --> D["最佳化 batch N 吞吐量"]
@@ -36,7 +38,7 @@ graph LR
 
 ## Tail Latency（尾端延遲）
 
-生產環境中 **P99 往往比 mean 高出 3–10×**，原因包括：
+生產環境中 **P99 往往比 mean 高出 2–5×**，原因包括：
 
 - GPU context switch / driver interrupt
 - CUDA kernel 排程抖動（jitter）
@@ -46,21 +48,21 @@ graph LR
 ```mermaid
 graph TD
     subgraph "延遲分布形狀"
-        A["mean ≈ median<br/>→ 對稱分布（理想）"]
-        B["mean ≫ median<br/>→ 右偏 + 長尾（常見）"]
+        A["mean ~ median\n→ 對稱分布（理想）"]
+        B["mean >> median\n→ 右偏 + 長尾（常見）"]
     end
-    B --> C["P99 暴增<br/>→ SLA 風險"]
-    A --> D["P99 可預測<br/>→ 穩定部署"]
+    B --> C["P99 暴增\n→ SLA 風險"]
+    A --> D["P99 可預測\n→ 穩定部署"]
 ```
 
 ### 為什麼要看 P95/P99
 
-若系統 SLA 要求 95% 請求在 5 ms 內完成，只看 mean（如 2 ms）會得出錯誤結論；
-實際 P95 可能達 12 ms，導致 SLA 違規。
+若系統 SLA 要求 95% 請求在 5ms 內完成，只看 mean（如 2ms）會得出錯誤結論；  
+實際 P95 可能達 12ms，導致 SLA 違規。
 
 ## 延遲分布分析
 
-單純的 mean / median 無法捕捉分布形狀。Notebook Cell 6c 用 500 次取樣繪製：
+單純的 mean / median 無法捕捉分布形狀，可透過多次取樣繪製：
 
 | 圖表 | 目的 |
 |------|------|
@@ -72,28 +74,37 @@ graph TD
 
 ```
 P99 / mean  < 2   → 延遲穩定，可預測
-P99 / mean  2–5   → 有抖動，需關注
+P99 / mean  2-5   → 有抖動，需關注
 P99 / mean  > 5   → 長尾嚴重，生產風險高
 ```
+
+ORT CPU 實測：P99 (97.2ms) / mean (36.4ms) ≈ **2.7×**，有明顯抖動（CPU 排程 jitter）。
 
 ## trtexec 輸出範例
 
 ```
 [I] === Performance summary ===
-[I] Throughput: 2345.67 qps
-[I] Latency: min = 0.389 ms, max = 0.612 ms, mean = 0.426 ms
-[I]          median = 0.421 ms, percentile(90%) = 0.445 ms,
-[I]          percentile(95%) = 0.458 ms, percentile(99%) = 0.501 ms
+[I] Throughput: 669.1 qps
+[I] Latency: min = 1.310 ms, max = 1.812 ms, mean = 1.383 ms
+[I]          median = 1.411 ms, percentile(90%) = 1.501 ms,
+[I]          percentile(95%) = 1.543 ms, percentile(99%) = 1.623 ms
 ```
 
 trtexec stdout 的效能指標可透過正規表達式提取，常見欄位為 `Throughput`、`mean`、`median`、`percentile(99%)` 等。
 
 ## Speedup 計算
 
-Notebook Cell 7 以 ORT 基線（Cell 6 量測值）為分母計算各引擎加速比：
-
 ```
 Speedup = baseline_mean_ms / engine_mean_ms
 ```
 
-加速比 > 1 代表比基線快；TRT FP16 相對 ORT CPU 通常可達 **20–60×**（視模型複雜度）。
+實測結果（H.onnx, RTX 5070 Laptop, ORT CPU 為基線）：
+
+| 方案 | 加速比 |
+|------|--------|
+| TRT FP32 最慢 (opt=0) | 8.8× |
+| TRT FP32 預設 (default) | 10.9× |
+| TRT FP16 最佳 (opt=4) | **26.3×** |
+
+> 基線為 ORT CPU；若基線改為 ORT GPU，加速比通常縮小至 **3×–8×**。  
+> 詳見 [四方案效能總比較](comparison.md)。

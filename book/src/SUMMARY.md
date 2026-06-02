@@ -28,6 +28,9 @@
 - [實務決策概念](benchmark/practical-decisions.md)
 - [結果分析](benchmark/results.md)
 - [Engine 參數 Sweep 調研](benchmark/param-sweep.md)
+- [Batch Size Sweep 調研](benchmark/batch-sweep.md)
+- [精度全覽比較](benchmark/precision-sweep.md)
+- [最終效能比較](benchmark/comparison.md)
 
 # 環境設定
 

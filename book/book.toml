@@ -13,5 +13,6 @@ command = "mdbook-mermaid"
 [output.html]
 git-repository-url = ""
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
+additional-css = ["custom.css"]
 fold.enable = true
-fold.level = 0    
+fold.level = 0

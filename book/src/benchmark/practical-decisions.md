@@ -144,3 +144,92 @@ trtexec --loadEngine=yolo_fp16.engine --shapes=images:8x3x640x640
 ```
 
 FP32 vs FP16 需要各 build 一次，但不同 batch size 不用重複 build。詳見 [評測方法論](methodology.md)。
+
+## 決策原則 7：CUDA Graph 可消除 CPU Launch 開銷
+
+固定 batch size（非動態）且追求極致延遲時，CUDA Graph 是值得的：
+
+```mermaid
+flowchart TD
+    A{"輸入形狀固定嗎？"}
+    A -->|是| B{"延遲 < 1ms 仍不夠快？"}
+    A -->|否| Z["不適用 CUDA Graph<br/>動態 shape 無法捕捉"]
+    B -->|是| C["啟用 CUDA Graph<br/>context.capture_begin / end"]
+    B -->|否| D["不需要，現有延遲已足夠"]
+
+    C --> E["每次 infer 改用<br/>graph.launch 取代 execute_async"]
+```
+
+CPU dispatch 開銷在 batch=1 的小模型可佔總延遲 20–40%。啟用後通常節省 0.1–0.5ms。
+
+```python
+# 捕捉 graph（只做一次）
+with torch.cuda.graph(graph):
+    context.execute_async_v3(stream_handle=stream.handle)
+
+# 推理時直接 replay
+graph.replay()
+```
+
+> **注意**：捕捉期間輸入 buffer 必須與推理期間相同。
+
+## 決策原則 8：Workspace 大小影響 Kernel 選擇
+
+`--workspace` 控制 TensorRT 在 Tactic 選擇時可使用的臨時 GPU 記憶體：
+
+```
+太小（< 256 MB）→ 部分高效 kernel 無法被選中 → 性能下降
+太大（> 4 GB）  → 擠壓其他模型或 OOM → 系統不穩
+推薦：512 MB–2 GB，視 GPU 總 VRAM 決定
+```
+
+```bash
+# 指定 workspace（單位 MiB，不是 MB）
+trtexec --onnx=yolo.onnx --fp16 --workspace=1024
+```
+
+| GPU VRAM | 建議 workspace |
+|----------|--------------|
+| 4 GB | 256–512 MB |
+| 8 GB | 512 MB–1 GB |
+| 16 GB+ | 1–2 GB |
+
+## 決策原則 9：多 Stream 提升 GPU 使用率（吞吐量場景）
+
+低延遲場景用 1 stream，高吞吐量場景可跑多個 stream 同時 infer：
+
+```mermaid
+graph LR
+    subgraph "單 Stream（延遲優先）"
+        S1["Stream 0"] --> I1["Infer"] --> S1
+    end
+
+    subgraph "多 Stream（吞吐優先）"
+        M1["Stream 0"] --> J1["Infer A"]
+        M2["Stream 1"] --> J2["Infer B"]
+        M3["Stream 2"] --> J3["Infer C"]
+        J1 & J2 & J3 --> R["結果合併"]
+    end
+```
+
+每個 stream 需要獨立的 `IExecutionContext` 與 I/O buffer。context 是執行緒不安全的，不能共用。
+
+## 效能不如預期時的診斷流程
+
+```mermaid
+flowchart TD
+    P["延遲比預期高"] --> Q{"與 trtexec 基準比，差多少？"}
+    Q -->|"> 50%"| R["CPU Overhead 或 GPU 搶佔"]
+    Q -->|"< 20%"| S["在可接受範圍，tuning 邊際效益低"]
+    Q -->|"20–50%"| T["值得調查"]
+
+    R --> R1{"用了 CUDA Graph？"}
+    R1 -->|否| R2["試開 CUDA Graph<br/>消除 CPU launch"]
+    R1 -->|是| R3["檢查是否有其他程序<br/>搶佔 GPU（nvidia-smi）"]
+
+    T --> T1{"Profile 哪層最慢？"}
+    T1 --> T2["trtexec --profilingVerbosity=detailed<br/>找瓶頸層"]
+    T2 --> T3{"是 plugin 或 unsupported op？"}
+    T3 -->|是| T4["考慮 TRT Plugin 或<br/>改寫成可 fuse 的寫法"]
+    T3 -->|否| T5["換 workspace 大小<br/>或換 tacticSources"]
+```

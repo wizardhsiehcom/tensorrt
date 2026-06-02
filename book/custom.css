@@ -1,0 +1,25 @@
+@font-face {
+    font-family: 'Cubic-11';
+    src: url('fonts/Cubic_11.woff2') format('woff2'),
+         url('fonts/Cubic_11.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Apply Cubic-11 for CJK characters throughout the book */
+body,
+.content p,
+.content h1,
+.content h2,
+.content h3,
+.content h4,
+.content h5,
+.content h6,
+.content li,
+.content td,
+.content th,
+.menu-title,
+.chapter li a {
+    font-family: 'Cubic-11', 'Open Sans', sans-serif;
+}
