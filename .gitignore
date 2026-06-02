@@ -13,6 +13,7 @@ data/
 *.onnx
 *.woff
 *.woff2
+*.exe
 
 
 __pycache__/
