@@ -13,14 +13,14 @@ def _load_env(path: Path) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip())
+        os.environ[k.strip()] = v.strip()
 
 
 _load_env(_REPO / ".env")
 
 TRTEXEC      = Path(os.environ.get("TRTEXEC",      "C:/Users/edisonhsieh/Downloads/TensorRT-10.8.0.43.Windows.win10.cuda-12.8/TensorRT-10.8.0.43/bin/trtexec.exe"))
 ONNX_MODEL   = Path(os.environ.get("ONNX_MODEL",   "C:/GPM_AI/H.onnx"))
-TEST_DATASET = Path(os.environ.get("TEST_DATASET",  "C:/Users/edisonhsieh/Downloads/Test_dataset"))
+TEST_DATASET = Path(os.environ.get("TEST_DATASET",  "D:/data/Test_dataset"))
 
 ENGINES_DIR = Path("engines")
 ENGINE_FP32 = ENGINES_DIR / "H_fp32.engine"
